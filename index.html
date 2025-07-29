@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>线段到线段距离计算演示</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            max-width: 800px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .code-block {
+            background: #f8f8f8;
+            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            display: block;
+            margin: 20px auto;
+            cursor: move;
+            border-radius: 8px;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .info-panel {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .info-item {
+            font-size: 14px;
+            color: #666;
+        }
+        .info-item strong {
+            color: #333;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .instructions {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>线段到线段的距离计算</h1>
+        
+        <div class="code-block">
+<pre>FMath::SegmentDistToSegment(
+    CapsuleStartPoint, CapsuleEndPoint,     // 胶囊体线段
+    EdgeStartPoint, EdgeEndPoint,           // 骨骼边缘线段
+    ClosestPointOnCapsule,                  // 输出：胶囊体上的最近点
+    ClosestPointOnEdge                      // 输出：边缘上的最近点
+);</pre>
+        </div>
+
+        <canvas id="canvas" width="700" height="500"></canvas>
+        
+        <div class="instructions">
+            拖动鼠标移动胶囊体 | 按住 Shift 键旋转胶囊体 | 按住 Alt 键移动骨骼链
+        </div>
+        
+        <div class="controls">
+            <button onclick="resetPositions()">重置位置</button>
+            <button onclick="toggleAnimation()">播放/暂停动画</button>
+            <button onclick="toggleCapsuleRadius()">显示/隐藏半径</button>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FF6347;"></div>
+                <span>胶囊体</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #4169E1;"></div>
+                <span>骨骼边缘</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FFD700;"></div>
+                <span>最近点对</span>
+            </div>
+        </div>
+        
+        <div class="info-panel">
+            <div class="info-item">
+                <strong>距离:</strong> <span id="distance">0</span> px
+            </div>
+            <div class="info-item">
+                <strong>胶囊体最近点:</strong> <span id="capsulePoint">(0, 0)</span>
+            </div>
+            <div class="info-item">
+                <strong>边缘最近点:</strong> <span id="edgePoint">(0, 0)</span>
+            </div>
+            <div class="info-item">
+                <strong>参数 t:</strong> <span id="paramT">0.00</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let isDragging = false;
+        let isShiftPressed = false;
+        let isAltPressed = false;
+        let animationRunning = false;
+        let showRadius = true;
+        let animationTime = 0;
+        let mouseX = 0, mouseY = 0;
+        
+        // 胶囊体
+        const capsule = {
+            x: 350,
+            y: 250,
+            length: 120,
+            radius: 30,
+            rotation: Math.PI / 4
+        };
+        
+        // 骨骼链
+        const bones = [
+            {x: 150, y: 150},
+            {x: 150, y: 350}
+        ];
+        
+        // 胶囊体辅助函数
+        function getCapsulePoints() {
+            const cos = Math.cos(capsule.rotation);
+            const sin = Math.sin(capsule.rotation);
+            return {
+                start: {
+                    x: capsule.x - sin * capsule.length * 0.5,
+                    y: capsule.y + cos * capsule.length * 0.5
+                },
+                end: {
+                    x: capsule.x + sin * capsule.length * 0.5,
+                    y: capsule.y - cos * capsule.length * 0.5
+                }
+            };
+        }
+        
+        // 线段到线段最近点算法
+        function segmentToSegmentDistance(p1, p2, p3, p4) {
+            const d1 = {x: p2.x - p1.x, y: p2.y - p1.y};
+            const d2 = {x: p4.x - p3.x, y: p4.y - p3.y};
+            const d3 = {x: p1.x - p3.x, y: p1.y - p3.y};
+            
+            const a = d1.x * d1.x + d1.y * d1.y;
+            const b = d1.x * d2.x + d1.y * d2.y;
+            const c = d2.x * d2.x + d2.y * d2.y;
+            const d = d1.x * d3.x + d1.y * d3.y;
+            const e = d2.x * d3.x + d2.y * d3.y;
+            
+            const denom = a * c - b * b;
+            let s = 0, t = 0;
+            
+            if (Math.abs(denom) > 0.0001) {
+                s = (b * e - c * d) / denom;
+                t = (a * e - b * d) / denom;
+            }
+            
+            // 限制参数在 [0, 1] 范围内
+            s = Math.max(0, Math.min(1, s));
+            t = Math.max(0, Math.min(1, t));
+            
+            // 重新计算最优参数
+            const closestOnSegment1Temp = {
+                x: p1.x + s * d1.x,
+                y: p1.y + s * d1.y
+            };
+            
+            // 找到 closestOnSegment1Temp 在线段2上的最近点
+            const v = {x: closestOnSegment1Temp.x - p3.x, y: closestOnSegment1Temp.y - p3.y};
+            const t2 = Math.max(0, Math.min(1, (v.x * d2.x + v.y * d2.y) / (d2.x * d2.x + d2.y * d2.y)));
+            
+            const closestOnSegment2 = {
+                x: p3.x + t2 * d2.x,
+                y: p3.y + t2 * d2.y
+            };
+            
+            // 找到 closestOnSegment2 在线段1上的最近点
+            const w = {x: closestOnSegment2.x - p1.x, y: closestOnSegment2.y - p1.y};
+            const s2 = Math.max(0, Math.min(1, (w.x * d1.x + w.y * d1.y) / (d1.x * d1.x + d1.y * d1.y)));
+            
+            const closestOnSegment1 = {
+                x: p1.x + s2 * d1.x,
+                y: p1.y + s2 * d1.y
+            };
+            
+            const distance = Math.sqrt(
+                Math.pow(closestOnSegment1.x - closestOnSegment2.x, 2) + 
+                Math.pow(closestOnSegment1.y - closestOnSegment2.y, 2)
+            );
+            
+            return {
+                point1: closestOnSegment1,
+                point2: closestOnSegment2,
+                distance: distance,
+                s: s2,
+                t: t2
+            };
+        }
+        
+        // 绘制函数
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 计算最近点
+            const capsulePoints = getCapsulePoints();
+            const result = segmentToSegmentDistance(
+                capsulePoints.start, capsulePoints.end,
+                bones[0], bones[1]
+            );
+            
+            // 绘制网格背景
+            ctx.strokeStyle = '#f0f0f0';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+            
+            // 绘制胶囊体
+            ctx.save();
+            
+            // 胶囊体主体（带半径）
+            if (showRadius) {
+                ctx.strokeStyle = '#FF6347';
+                ctx.lineWidth = capsule.radius * 2;
+                ctx.lineCap = 'round';
+                ctx.globalAlpha = 0.3;
+                ctx.beginPath();
+                ctx.moveTo(capsulePoints.start.x, capsulePoints.start.y);
+                ctx.lineTo(capsulePoints.end.x, capsulePoints.end.y);
+                ctx.stroke();
+            }
+            
+            // 胶囊体中心线
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = '#FF6347';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([8, 4]);
+            ctx.beginPath();
+            ctx.moveTo(capsulePoints.start.x, capsulePoints.start.y);
+            ctx.lineTo(capsulePoints.end.x, capsulePoints.end.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // 胶囊体端点
+            ctx.fillStyle = '#FF6347';
+            ctx.beginPath();
+            ctx.arc(capsulePoints.start.x, capsulePoints.start.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(capsulePoints.end.x, capsulePoints.end.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+            
+            // 绘制骨骼边缘
+            ctx.strokeStyle = '#4169E1';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(bones[0].x, bones[0].y);
+            ctx.lineTo(bones[1].x, bones[1].y);
+            ctx.stroke();
+            
+            // 绘制骨骼点
+            bones.forEach((bone, index) => {
+                // 骨骼半径
+                if (showRadius) {
+                    ctx.fillStyle = 'rgba(65, 105, 225, 0.2)';
+                    ctx.beginPath();
+                    ctx.arc(bone.x, bone.y, 12, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // 骨骼中心
+                ctx.fillStyle = '#4169E1';
+                ctx.beginPath();
+                ctx.arc(bone.x, bone.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 标签
+                ctx.fillStyle = '#333';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(index === 0 ? 'EdgeStart' : 'EdgeEnd', bone.x + 60, bone.y + 5);
+            });
+            
+            // 绘制最近点连线
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(result.point1.x, result.point1.y);
+            ctx.lineTo(result.point2.x, result.point2.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // 绘制最近点
+            ctx.fillStyle = '#FFD700';
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 2;
+            
+            // 胶囊体上的最近点
+            ctx.beginPath();
+            ctx.arc(result.point1.x, result.point1.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            
+            // 边缘上的最近点
+            ctx.beginPath();
+            ctx.arc(result.point2.x, result.point2.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            
+            // 标注最近点
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('ClosestPointOnCapsule', result.point1.x, result.point1.y - 15);
+            ctx.fillText('ClosestPointOnEdge', result.point2.x, result.point2.y + 25);
+            
+            // 绘制距离标注
+            const midX = (result.point1.x + result.point2.x) / 2;
+            const midY = (result.point1.y + result.point2.y) / 2;
+            ctx.fillStyle = '#666';
+            ctx.font = '16px Arial';
+            ctx.fillText(`${Math.round(result.distance)} px`, midX, midY - 5);
+            
+            // 更新信息面板
+            document.getElementById('distance').textContent = Math.round(result.distance);
+            document.getElementById('capsulePoint').textContent = 
+                `(${Math.round(result.point1.x)}, ${Math.round(result.point1.y)})`;
+            document.getElementById('edgePoint').textContent = 
+                `(${Math.round(result.point2.x)}, ${Math.round(result.point2.y)})`;
+            document.getElementById('paramT').textContent = result.t.toFixed(2);
+            
+            // 动画
+            if (animationRunning) {
+                animationTime += 0.02;
+                capsule.x = 350 + Math.sin(animationTime) * 100;
+                capsule.y = 250 + Math.cos(animationTime * 0.7) * 50;
+                capsule.rotation = animationTime * 0.5;
+            }
+            
+            requestAnimationFrame(draw);
+        }
+        
+        // 事件处理
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+            isDragging = true;
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                const newX = e.clientX - rect.left;
+                const newY = e.clientY - rect.top;
+                const dx = newX - mouseX;
+                const dy = newY - mouseY;
+                
+                if (isShiftPressed) {
+                    // 旋转胶囊体
+                    capsule.rotation += dx * 0.01;
+                } else if (isAltPressed) {
+                    // 移动骨骼链
+                    bones.forEach(bone => {
+                        bone.x += dx;
+                        bone.y += dy;
+                    });
+                } else {
+                    // 移动胶囊体
+                    capsule.x = newX;
+                    capsule.y = newY;
+                }
+                
+                mouseX = newX;
+                mouseY = newY;
+            }
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+        
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Shift') isShiftPressed = true;
+            if (e.key === 'Alt') {
+                e.preventDefault();
+                isAltPressed = true;
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'Shift') isShiftPressed = false;
+            if (e.key === 'Alt') isAltPressed = false;
+        });
+        
+        // 控制函数
+        function resetPositions() {
+            capsule.x = 350;
+            capsule.y = 250;
+            capsule.rotation = Math.PI / 4;
+            bones[0] = {x: 150, y: 150};
+            bones[1] = {x: 150, y: 350};
+            animationTime = 0;
+        }
+        
+        function toggleAnimation() {
+            animationRunning = !animationRunning;
+        }
+        
+        function toggleCapsuleRadius() {
+            showRadius = !showRadius;
+        }
+        
+        // 启动绘制
+        draw();
+    </script>
+</body>
+</html>
