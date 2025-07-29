@@ -113,8 +113,8 @@
 <pre>FMath::SegmentDistToSegment(
     CapsuleStartPoint, CapsuleEndPoint,     // 胶囊体线段
     EdgeStartPoint, EdgeEndPoint,           // 骨骼边缘线段
-    ClosestPointOnCapsule,                  // 输出：胶囊体上的最近点
-    ClosestPointOnEdge                      // 输出：边缘上的最近点
+    ClosestPointOnCapsule,                  // 输出：胶囊体线段上的最近点
+    ClosestPointOnEdge                      // 输出：骨骼边缘线段上的最近点
 );</pre>
         </div>
 
@@ -392,8 +392,8 @@
             ctx.fillStyle = '#333';
             ctx.font = 'bold 12px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('ClosestPointOnCapsule', result.point1.x, result.point1.y - 15);
-            ctx.fillText('ClosestPointOnEdge', result.point2.x, result.point2.y + 25);
+            ctx.fillText('胶囊体线段上的最近点', result.point1.x, result.point1.y - 15);
+            ctx.fillText('骨骼边缘线段上的最近点', result.point2.x, result.point2.y + 25);
             
             // 绘制距离标注
             const midX = (result.point1.x + result.point2.x) / 2;
